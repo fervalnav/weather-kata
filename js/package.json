@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Kata to practice decoupling techniques and get fast and deterministic tests",
   "main": " ",
+  "type": "module",
   "directories": {
     "lib": "src",
     "test": "test"

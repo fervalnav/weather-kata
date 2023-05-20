@@ -1,4 +1,7 @@
 # Weather kata
 The goal of this kata is to identify the code smells and fix them.
 
-Kata prepared in: Java, JS, PHP and Python.
+# More ideas for improve the code
+- Add a new classes to call the APIs
+
+# Kata resolved by Fernando Valdes 20/05/2023

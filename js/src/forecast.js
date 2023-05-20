@@ -1,77 +1,94 @@
-import request from 'request';
-import { promisify } from 'util';
-const rp = promisify(request);
+import request from 'request'
+import { promisify } from 'util'
+const rp = promisify(request)
 
 class Forecast {
-    async predict(city, datetime, wind) {
-        // When date is not provided we look for the current prediction
-        if (!datetime) {
-            datetime = new Date();
-        }
+  async predict (city, datetime = new Date(), wind = false) {
+    // Get the coordinates of the city
+    const { latitude, longitude } = await this.getCoordinates(city)
+    // Get the attribute to predict
+    const attribute = wind
+      ? this.dailyAttributes.wind
+      : this.dailyAttributes.code
 
-        // If there is a prediction for datetime
-        let datetime2 = new Date();
-        datetime2.setDate(datetime2.getDate() + 6);
-        if (datetime < datetime2) {
-            // Find the latitude and longitude to get the prediction
-            const response = JSON.parse((await rp("https://positionstack.com/geo_api.php?query="+ city)).body);
-            const latitude = response['data'][0]['latitude'];
-            const longitude = response['data'][0]['longitude'];
+    // Find the predictions for the location
+    const baseUrl = 'https://api.open-meteo.com/v1/forecast'
+    const queryParams = new URLSearchParams({
+      latitude,
+      longitude,
+      daily: attribute,
+      timezone: 'Europe/Berlin',
+      start_date: datetime.toISOString().slice(0, 10),
+      end_date: datetime.toISOString().slice(0, 10)
+    })
+    const url = `${baseUrl}?${queryParams.toString()}`
+    const result = JSON.parse((await rp(url)).body)
+    if (result && result.error) throw new Error(result.reason)
 
-            // Find the predictions for the location
-            const url = `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&daily=weathercode,windspeed_10m_max&current_weather=true&timezone=Europe%2FBerlin`;
-            const results = JSON.parse((await rp(url)).body);
-            for (let i = 0; i < 7; i++) {
-                // When the date is the expected
-                if (results["daily"]['time'][i] === datetime.toISOString().slice(0, 10)) {
-                    if (wind) {
-                        return results['daily']['windspeed_10m_max'][i];
-                    } else {
-                        const weatherCode = results['daily']['weathercode'][i];
+    if (wind)
+      return `Max windspeed: ${result.daily[attribute][0]} ${result['daily_units'][attribute]}`
 
-                        return this.codeToText(weatherCode);
-                    }
-                }
-            }
-        } else {
-            return '';
-        }
+    const mappedCode = this.codeToText(result.daily[attribute])
+    if (!mappedCode) throw new Error('Weather code not found')
+    return this.codeToText(result.daily[attribute])
+  }
+
+  async getCoordinates (city) {
+    if (!city) {
+      throw new Error('City is required')
     }
 
-    codeToText (weatherCode) {
-        const text = {
-            0: 'Clear sky',
-            1: 'Mainly clear, partly cloudy, and overcast',
-            2: 'Mainly clear, partly cloudy, and overcast',
-            3: 'Mainly clear, partly cloudy, and overcast',
-            45: 'Fog and depositing rime fog',
-            48: 'Fog and depositing rime fog',
-            51: 'Drizzle: Light, moderate, and dense intensity',
-            53: 'Drizzle: Light, moderate, and dense intensity',
-            55: 'Drizzle: Light, moderate, and dense intensity',
-            56: 'Freezing Drizzle: Light and dense intensity',
-            57: 'Freezing Drizzle: Light and dense intensity',
-            61: 'Rain: Slight, moderate and heavy intensity',
-            63: 'Rain: Slight, moderate and heavy intensity',
-            65: 'Rain: Slight, moderate and heavy intensity',
-            66: 'Freezing Rain: Light and heavy intensity',
-            67: 'Freezing Rain: Light and heavy intensity',
-            71: 'Snow fall: Slight, moderate, and heavy intensity',
-            73: 'Snow fall: Slight, moderate, and heavy intensity',
-            75: 'Snow fall: Slight, moderate, and heavy intensity',
-            77: 'Snow grains',
-            80: 'Rain showers: Slight, moderate, and violent',
-            81: 'Rain showers: Slight, moderate, and violent',
-            82: 'Rain showers: Slight, moderate, and violent',
-            85: 'Snow showers slight and heavy',
-            86: 'Snow showers slight and heavy',
-            95: 'Thunderstorm: Slight or moderate',
-            96: 'Thunderstorm with slight and heavy hail',
-            99: 'Thunderstorm with slight and heavy hail',
-        }[weatherCode];
+    // Find the latitude and longitude to get the prediction
+    const request = await rp(
+      'https://positionstack.com/geo_api.php?query=' + city
+    )
 
-        return text;
-    }
+    const response = JSON.parse(request.body)
+    if (!response.data.length) throw new Error('City not found')
+
+    const latitude = response['data'][0]['latitude']
+    const longitude = response['data'][0]['longitude']
+    return { latitude, longitude }
+  }
+
+  dailyAttributes = {
+    code: 'weathercode',
+    wind: 'windspeed_10m_max'
+  }
+
+  codeToText (weatherCode) {
+    const text = {
+      0: 'Clear sky',
+      1: 'Mainly clear, partly cloudy, and overcast',
+      2: 'Mainly clear, partly cloudy, and overcast',
+      3: 'Mainly clear, partly cloudy, and overcast',
+      45: 'Fog and depositing rime fog',
+      48: 'Fog and depositing rime fog',
+      51: 'Drizzle: Light, moderate, and dense intensity',
+      53: 'Drizzle: Light, moderate, and dense intensity',
+      55: 'Drizzle: Light, moderate, and dense intensity',
+      56: 'Freezing Drizzle: Light and dense intensity',
+      57: 'Freezing Drizzle: Light and dense intensity',
+      61: 'Rain: Slight, moderate and heavy intensity',
+      63: 'Rain: Slight, moderate and heavy intensity',
+      65: 'Rain: Slight, moderate and heavy intensity',
+      66: 'Freezing Rain: Light and heavy intensity',
+      67: 'Freezing Rain: Light and heavy intensity',
+      71: 'Snow fall: Slight, moderate, and heavy intensity',
+      73: 'Snow fall: Slight, moderate, and heavy intensity',
+      75: 'Snow fall: Slight, moderate, and heavy intensity',
+      77: 'Snow grains',
+      80: 'Rain showers: Slight, moderate, and violent',
+      81: 'Rain showers: Slight, moderate, and violent',
+      82: 'Rain showers: Slight, moderate, and violent',
+      85: 'Snow showers slight and heavy',
+      86: 'Snow showers slight and heavy',
+      95: 'Thunderstorm: Slight or moderate',
+      96: 'Thunderstorm with slight and heavy hail',
+      99: 'Thunderstorm with slight and heavy hail'
+    }[weatherCode]
+
+    return text
+  }
 }
-
-export default Forecast;
+export default Forecast
